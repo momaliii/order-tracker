@@ -2,36 +2,46 @@
 
 ## Quick Deploy Options
 
+## Recommended production architecture (single origin)
+
+Because the dashboard uses **httpOnly session cookies** for admin login, the easiest and most reliable deployment is:
+
+- **One Node service** serves:
+  - API routes (`/api/*`)
+  - Tracker script (`/tracker.js`)
+  - Dashboard static build (`/` from `dashboard/dist`)
+- **Supabase Postgres** as the database
+
+This avoids cross-domain cookie problems.
+
 ### Option 1: Railway (Recommended - Easiest)
 
 1. **Create Railway Account**: https://railway.app
 2. **New Project** → **Deploy from GitHub** (or use Railway CLI)
-3. **Add PostgreSQL** service
-4. **Set Environment Variables**:
-   - `DATABASE_URL` (auto-set by Railway PostgreSQL)
-   - `EASYORDERS_WEBHOOK_SECRET` (from EasyOrders dashboard)
-   - `ALLOWED_ORIGINS` (your dashboard URL + website domain)
+3. **Database**: Use Supabase (recommended) or Railway Postgres
+4. **Set Environment Variables** (Railway → Variables):
+   - `DATABASE_URL` (Supabase session pooler is recommended)
+   - `DIRECT_URL` (you can set to same as DATABASE_URL if you can't access direct 5432)
    - `NODE_ENV=production`
-   - `PORT` (Railway sets this automatically)
+   - `ADMIN_USERNAME`
+   - `ADMIN_PASSWORD_HASH`
+   - `ALLOWED_ORIGINS` (optional; if unset, server allows all)
+   - `EASYORDERS_WEBHOOK_SECRET` (optional; you can set via dashboard after login)
 
 5. **Deploy Commands**:
-   - Build: `npm run build:server`
+   - Build: `npm run build`
    - Start: `npm start`
-   - Migrations: Add a one-off service or run `npm run db:migrate` via Railway CLI
-
-6. **Dashboard**: Deploy separately to Vercel/Netlify (see below)
+   - DB: Run once `npm run db:push -- --accept-data-loss` (or `npm run db:deploy` if using migrations)
 
 ### Option 2: Render
 
 1. **Backend Service**:
    - New Web Service
    - Connect GitHub repo
-   - Build: `npm run build:server`
+   - Build: `npm install && npm run build`
    - Start: `npm start`
-   - Add PostgreSQL database
-   - Set environment variables
-
-2. **Dashboard**: Deploy as Static Site (see below)
+   - Set environment variables (same list as Railway)
+   - Add a one-time job to run: `npm run db:push -- --accept-data-loss`
 
 ### Option 3: DigitalOcean App Platform
 
@@ -116,6 +126,8 @@ sudo systemctl restart nginx
 
 ## Dashboard Deployment (Static)
 
+If you REALLY want dashboard on a separate domain, you must change cookies to `SameSite=None; Secure` and ensure CORS+credentials is configured. The repo is currently optimized for **single-origin** deployment.
+
 ### Vercel
 
 1. **Install Vercel CLI**: `npm i -g vercel`
@@ -140,10 +152,13 @@ sudo systemctl restart nginx
 
 ```bash
 DATABASE_URL="postgresql://user:pass@host:5432/dbname"
+DIRECT_URL="postgresql://user:pass@host:5432/dbname"
 PORT=3000
 NODE_ENV=production
 EASYORDERS_WEBHOOK_SECRET="your-secret-from-easyorders"
-ALLOWED_ORIGINS="https://your-dashboard.com,https://your-website.com"
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD_HASH="$2b$10$..."
+ALLOWED_ORIGINS="https://your-domain.com"
 ```
 
 ### Dashboard (Build-time)
@@ -151,6 +166,8 @@ ALLOWED_ORIGINS="https://your-dashboard.com,https://your-website.com"
 ```bash
 VITE_API_URL="https://your-backend-api.com"
 ```
+
+If using single-origin deployment (recommended), you do NOT need `VITE_API_URL`. The dashboard auto-detects the API base URL via `window.location.origin`.
 
 ## Post-Deployment Checklist
 

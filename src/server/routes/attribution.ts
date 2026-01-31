@@ -61,17 +61,7 @@ async function linkOrderToTouchpoints(orderId: string, attributionWindowDays: nu
   }
   
   // Filter out direct traffic (no attribution data)
-  const attributedTouchpoints = touchpoints.filter(
-    (tp) =>
-      !isDirectTouchpoint({
-        utm_source: tp.utmSource,
-        utm_medium: tp.utmMedium,
-        fbclid: tp.fbclid,
-        ttclid: tp.ttclid,
-        gclid: tp.gclid,
-        referrer: tp.referrer,
-      })
-  );
+  const attributedTouchpoints = touchpoints.filter(tp => !isDirectTouchpoint(tp));
   
   if (attributedTouchpoints.length === 0) {
     return [];
@@ -146,8 +136,8 @@ attributionRouter.get('/revenue', async (req, res) => {
       status,
     } = req.query;
 
-    const groupByKey = typeof groupBy === 'string' ? groupBy : 'source';
-    const modelKey = typeof model === 'string' ? model : 'last_touch';
+    const groupByKey =
+      typeof groupBy === 'string' ? groupBy : 'source';
     
     const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate as string) : new Date();
@@ -160,7 +150,7 @@ attributionRouter.get('/revenue', async (req, res) => {
       },
       include: {
         attributions: {
-          where: { model: modelKey },
+          where: { model: model as string },
           include: {
             touchpoint: true,
           },
@@ -183,7 +173,7 @@ attributionRouter.get('/revenue', async (req, res) => {
       },
       include: {
         attributions: {
-          where: { model: modelKey },
+          where: { model: model as string },
           include: {
             touchpoint: true,
           },

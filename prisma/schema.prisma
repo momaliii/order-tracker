@@ -177,3 +177,24 @@ model Setting {
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 }
+
+model AdminUser {
+  id           String         @id @default(cuid())
+  username     String         @unique
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  sessions AdminSession[]
+}
+
+model AdminSession {
+  id          String    @id // random token stored in httpOnly cookie
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+}

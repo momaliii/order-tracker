@@ -2,45 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { hashSecret } from '../../lib/utils.js';
-import { verifySupabaseJwt } from '../lib/supabaseAuth.js';
+import { requireAdminSession } from '../auth/adminAuth.js';
 
 export const settingsRouter = Router();
 
-function parseAdminEmails(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS || '';
-  return new Set(
-    raw
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
-async function requireAdmin(req: any): Promise<{ ok: true } | { ok: false; message: string }> {
-  const auth = req.headers.authorization || req.headers.Authorization;
-  if (!auth || typeof auth !== 'string' || !auth.startsWith('Bearer ')) {
-    return { ok: false, message: 'Missing Authorization header' };
-  }
-
-  const token = auth.slice('Bearer '.length).trim();
-  try {
-    const user = await verifySupabaseJwt(token);
-    const allow = parseAdminEmails();
-    if (allow.size === 0) {
-      return { ok: false, message: 'ADMIN_EMAILS not configured on server' };
-    }
-    if (!user.email || !allow.has(user.email.toLowerCase())) {
-      return { ok: false, message: 'Forbidden' };
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : 'Unauthorized' };
-  }
-}
-
-settingsRouter.get('/status', async (req, res) => {
-  const auth = await requireAdmin(req);
-  if (!auth.ok) return res.status(401).json({ success: false, error: auth.message });
+settingsRouter.get('/status', requireAdminSession, async (req, res) => {
 
   const rec = await prisma.setting.findUnique({
     where: { key: 'easyorders_webhook_secret_hash' },
@@ -56,9 +22,7 @@ settingsRouter.get('/status', async (req, res) => {
   });
 });
 
-settingsRouter.put('/easyorders-webhook-secret', async (req, res) => {
-  const auth = await requireAdmin(req);
-  if (!auth.ok) return res.status(401).json({ success: false, error: auth.message });
+settingsRouter.put('/easyorders-webhook-secret', requireAdminSession, async (req, res) => {
 
   const schema = z.object({
     secret: z.string().min(6),

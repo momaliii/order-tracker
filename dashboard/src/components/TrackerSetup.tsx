@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import './TrackerSetup.css';
-import { useAuth } from '../lib/auth';
 
 function copy(text: string) {
   return navigator.clipboard.writeText(text);
@@ -17,12 +16,15 @@ type TestState =
   | { status: 'error'; message: string };
 
 export default function TrackerSetup() {
-  const { accessToken } = useAuth();
   const [apiBase, setApiBase] = useState<string>(
-    (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000'
+    (import.meta.env.VITE_API_URL as string) || window.location.origin
   );
   const [loadInHead, setLoadInHead] = useState(true);
   const [testState, setTestState] = useState<TestState>({ status: 'idle' });
+  const [adminUser, setAdminUser] = useState<string | null>(null);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginMsg, setLoginMsg] = useState<string | null>(null);
   const [eoSecret, setEoSecret] = useState('');
   const [eoStatus, setEoStatus] = useState<{ configured: boolean; source: string } | null>(null);
   const [eoMsg, setEoMsg] = useState<string | null>(null);
@@ -98,23 +100,62 @@ export default function TrackerSetup() {
     }
   };
 
+  const fetchMe = async () => {
+    try {
+      const res = await fetch(`${api}/api/auth/me`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const json = await res.json();
+      if (json?.success && json?.authenticated) setAdminUser(json.username || 'admin');
+      else setAdminUser(null);
+    } catch {
+      setAdminUser(null);
+    }
+  };
+
   useEffect(() => {
-    // No-op: legacy admin-key flow removed in Supabase Auth mode.
+    fetchMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const login = async () => {
+    setLoginMsg(null);
+    try {
+      const res = await fetch(`${api}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword }),
+      });
+      const json = await res.json();
+      if (!json?.success) {
+        setLoginMsg(json?.error || 'Login failed');
+        return;
+      }
+      setLoginPassword('');
+      setAdminUser(json.username || loginUsername.trim());
+      setLoginMsg('Logged in.');
+    } catch (e) {
+      setLoginMsg(e instanceof Error ? e.message : 'Login failed');
+    }
+  };
+
+  const logout = async () => {
+    setLoginMsg(null);
+    await fetch(`${api}/api/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+    setAdminUser(null);
+  };
 
   const fetchEasyOrdersStatus = async () => {
     try {
       const res = await fetch(`${api}/api/settings/status`, {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        credentials: 'include',
         cache: 'no-store',
       });
       const json = await res.json();
-      if (json?.success) {
-        setEoStatus(json.easyorders);
-      } else {
-        setEoStatus(null);
-        setEoMsg(json?.error || 'Unauthorized');
-      }
+      if (json?.success) setEoStatus(json.easyorders);
+      else setEoStatus(null);
     } catch {
       setEoStatus(null);
     }
@@ -122,8 +163,8 @@ export default function TrackerSetup() {
 
   const saveEasyOrdersSecret = async () => {
     setEoMsg(null);
-    if (!accessToken) {
-      setEoMsg('You must be signed in.');
+    if (!adminUser) {
+      setEoMsg('Please login first.');
       return;
     }
     if (!eoSecret.trim()) {
@@ -136,8 +177,8 @@ export default function TrackerSetup() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ secret: eoSecret.trim() }),
       });
       const json = await res.json();
@@ -231,46 +272,88 @@ export default function TrackerSetup() {
         <h2>EasyOrders Webhook Secret</h2>
         <p className="muted">
           You can set the webhook secret from the dashboard (stored as a hash in the database).
-          Only signed-in admins can change this setting.
+          This requires admin login (httpOnly session cookie).
         </p>
 
         <div className="twoCol">
           <div className="field">
-            <label>EasyOrders Webhook Secret</label>
+            <label>Admin Username</label>
             <input
-              value={eoSecret}
-              onChange={(e) => setEoSecret(e.target.value)}
-              placeholder="Paste secret from EasyOrders webhook settings"
+              value={loginUsername}
+              onChange={(e) => setLoginUsername(e.target.value)}
+              placeholder="ADMIN_USERNAME"
+            />
+          </div>
+          <div className="field">
+            <label>Admin Password</label>
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              placeholder="Your password"
             />
           </div>
         </div>
 
         <div className="fieldRow">
-          <button className="btn" type="button" onClick={fetchEasyOrdersStatus} disabled={!accessToken}>
-            Refresh Status
+          <button className="btn" type="button" onClick={adminUser ? logout : login}>
+            {adminUser ? 'Logout' : 'Login'}
           </button>
-          <button className="btn btnPrimary" type="button" onClick={saveEasyOrdersSecret} disabled={!accessToken}>
-            Save Secret
+          <button className="btn" type="button" onClick={fetchEasyOrdersStatus} disabled={!adminUser}>
+            Refresh Status
           </button>
         </div>
 
-        {eoStatus && (
-          <div className="testBox">
-            <div className="testTitle">Current status</div>
-            <div className="testLine">
-              - Configured: <b>{eoStatus.configured ? 'Yes' : 'No'}</b>
-            </div>
-            <div className="testLine">
-              - Source: <b>{eoStatus.source}</b>
-            </div>
+        {loginMsg && (
+          <div className={`testBox ${loginMsg === 'Logged in.' ? 'testBoxOk' : 'testBoxErr'}`}>
+            <div className="testTitle">Login</div>
+            <div className="testLine">{loginMsg}</div>
           </div>
         )}
 
-        {eoMsg && (
-          <div className={`testBox ${eoMsg.startsWith('Saved') ? 'testBoxOk' : 'testBoxErr'}`}>
-            <div className="testTitle">Message</div>
-            <div className="testLine">{eoMsg}</div>
-          </div>
+        {adminUser && (
+          <>
+            <div className="twoCol">
+              <div className="field">
+                <label>Logged in as</label>
+                <input value={adminUser} readOnly />
+              </div>
+              <div className="field">
+                <label>EasyOrders Webhook Secret</label>
+                <input
+                  value={eoSecret}
+                  onChange={(e) => setEoSecret(e.target.value)}
+                  placeholder="Paste secret from EasyOrders webhook settings"
+                />
+              </div>
+            </div>
+
+            <div className="fieldRow">
+              <div />
+              <button className="btn btnPrimary" type="button" onClick={saveEasyOrdersSecret}>
+                Save Secret
+              </button>
+            </div>
+
+            {eoStatus && (
+              <div className="testBox">
+                <div className="testTitle">Current status</div>
+                <div className="testLine">
+                  - Configured: <b>{eoStatus.configured ? 'Yes' : 'No'}</b>
+                </div>
+                <div className="testLine">
+                  - Source: <b>{eoStatus.source}</b>
+                </div>
+              </div>
+            )}
+
+            {eoMsg && (
+              <div className={`testBox ${eoMsg.startsWith('Saved') ? 'testBoxOk' : 'testBoxErr'}`}>
+                <div className="testTitle">Message</div>
+                <div className="testLine">{eoMsg}</div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

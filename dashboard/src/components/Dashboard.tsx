@@ -7,9 +7,8 @@ import TrackerSetup from './TrackerSetup';
 import UtmBuilder from './UtmBuilder';
 import HealthBadge from './HealthBadge';
 import './Dashboard.css';
-import { useAuth } from '../lib/auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
 interface RevenueData {
   [key: string]: string | number;
@@ -19,7 +18,6 @@ interface RevenueData {
 }
 
 function Dashboard() {
-  const { email, signOut } = useAuth();
   const [tab, setTab] = useState<'overview' | 'orders' | 'setup' | 'utm'>('overview');
   const [dateRange, setDateRange] = useState({
     start: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
@@ -47,10 +45,12 @@ function Dashboard() {
     try {
       const [revenueRes, ordersRes] = await Promise.all([
         fetch(
-          `${API_URL}/api/attribution/revenue?startDate=${dateRange.start}&endDate=${dateRange.end}&groupBy=${groupBy}&model=${attributionModel}`
+          `${API_URL}/api/attribution/revenue?startDate=${dateRange.start}&endDate=${dateRange.end}&groupBy=${groupBy}&model=${attributionModel}`,
+          { credentials: 'include' }
         ),
         fetch(
-          `${API_URL}/api/attribution/orders?startDate=${dateRange.start}&endDate=${dateRange.end}&limit=100`
+          `${API_URL}/api/attribution/orders?startDate=${dateRange.start}&endDate=${dateRange.end}&limit=100`,
+          { credentials: 'include' }
         ),
       ]);
 
@@ -100,15 +100,7 @@ function Dashboard() {
             <h1>Attribution Tracker</h1>
             <div className="subTitle">Track real revenue by platform → campaign → creative.</div>
           </div>
-          <div className="headerRight">
-            <div className="userChip" title={email || undefined}>
-              {email ? email : 'Signed in'}
-            </div>
-            <button className="logoutBtn" onClick={() => signOut()} type="button">
-              Logout
-            </button>
-            <HealthBadge />
-          </div>
+          <HealthBadge />
         </div>
 
         <div className="tabs">

@@ -20,37 +20,6 @@
   margin-bottom: 14px;
 }
 
-.headerRight {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.userChip {
-  max-width: 340px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid #e6e6e6;
-  background: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  color: #333;
-}
-
-.logoutBtn {
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid #e6e6e6;
-  background: #fff;
-  cursor: pointer;
-  font-weight: 900;
-}
-
 .dashboard-header h1 {
   margin: 0;
   color: #111;
