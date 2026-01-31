@@ -1,0 +1,179 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Used by Prisma Migrate/Introspect. On Supabase, set this to the "Direct connection" string.
+  directUrl = env("DIRECT_URL")
+}
+
+model Visitor {
+  id        String   @id @default(cuid())
+  vid       String   @unique // First-party visitor ID
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions    Session[]
+  touchpoints Touchpoint[]
+  orders      Order[]
+
+  @@index([vid])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  sid       String   // Session ID
+  visitorId String
+  visitor   Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  touchpoints Touchpoint[]
+
+  @@index([sid])
+  @@index([visitorId])
+  @@index([createdAt])
+}
+
+model Touchpoint {
+  id        String   @id @default(cuid())
+  visitorId String
+  visitor   Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  sessionId String?
+  session   Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  // Event type
+  eventType String // page_view, session_start, add_to_cart, begin_checkout, purchase
+
+  // Attribution data
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmContent  String? // Creative/ad name
+  utmTerm     String?
+
+  // Click IDs
+  fbclid  String? // Facebook Click ID
+  ttclid  String? // TikTok Click ID
+  gclid   String? // Google Click ID
+  wbraid  String? // Google Web-to-App
+  gbraid  String? // Google App-to-Web
+  msclkid String? // Microsoft Click ID
+  sccid   String? // Snapchat Click ID
+
+  // Context
+  referrer    String?
+  landingUrl  String?
+  userAgent   String?
+  ipAddress   String? // Hashed for privacy
+  deviceType  String? // mobile, desktop, tablet
+  browser     String?
+  os          String?
+
+  // Timestamps
+  timestamp DateTime @default(now())
+
+  // Linked orders (many-to-many via attribution)
+  attributions Attribution[]
+
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([timestamp])
+  @@index([utmSource, utmMedium, utmCampaign])
+  @@index([eventType])
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  orderId   String   @unique // External order ID (from EasyOrders)
+  visitorId String?  // Linked visitor (if vid was passed)
+  visitor   Visitor? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+
+  // Order data
+  storeId      String
+  totalCost    Float
+  shippingCost Float
+  currency     String   @default("USD")
+  status       String   // pending, paid, delivered, cancelled, etc.
+
+  // Customer data (hashed for privacy)
+  customerName  String?
+  customerPhone String? // Hashed
+  customerEmail String? // Hashed
+  address       String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  statusEvents OrderStatusEvent[]
+  items        OrderItem[]
+  attributions Attribution[]
+
+  @@index([orderId])
+  @@index([visitorId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([storeId])
+}
+
+model OrderStatusEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  oldStatus String?
+  newStatus String
+  paymentRefId String?
+  timestamp DateTime @default(now())
+
+  @@index([orderId])
+  @@index([timestamp])
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  variantId String?
+  price     Float
+  quantity  Int
+  sku       String?
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Attribution {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  touchpointId String
+  touchpoint Touchpoint @relation(fields: [touchpointId], references: [id], onDelete: Cascade)
+
+  // Attribution model
+  model String // first_touch, last_touch, assisted, time_decay
+
+  // Time to purchase (in seconds)
+  timeToPurchase Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([orderId, touchpointId, model])
+  @@index([orderId])
+  @@index([touchpointId])
+  @@index([model])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
