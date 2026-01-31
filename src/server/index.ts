@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
 import { prisma } from '../lib/prisma.js';
 import { collectRouter } from './routes/collect.js';
@@ -80,8 +79,10 @@ app.use('/api/auth', authRouter);
 // Serve tracker script
 app.get('/tracker.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
-  const trackerPath = fileURLToPath(new URL('../tracker/tracker.js', import.meta.url));
-  res.sendFile(path.resolve(trackerPath));
+  // In production we run from dist/, so serve the source tracker file by repo path.
+  // Railway images include the repo workspace, so this path is available.
+  const trackerPath = path.resolve(process.cwd(), 'src', 'tracker', 'tracker.js');
+  res.sendFile(trackerPath);
 });
 
 // Serve dashboard (production)
