@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { isDirectTouchpoint } from '../../lib/utils.js';
-import type { Touchpoint } from '@prisma/client';
 
 export const attributionRouter = Router();
 
 // Attribution window in days (default 30)
 const DEFAULT_ATTRIBUTION_WINDOW = 30;
+
+type TouchpointRecord = Awaited<ReturnType<typeof prisma.touchpoint.findMany>>[number];
 
 /**
  * Link orders to touchpoints and create attribution records
@@ -31,7 +32,7 @@ async function linkOrderToTouchpoints(orderId: string, attributionWindowDays: nu
   windowStart.setDate(windowStart.getDate() - attributionWindowDays);
   
   // Find touchpoints for this visitor within the attribution window
-  let touchpoints: Touchpoint[] = [];
+  let touchpoints: TouchpointRecord[] = [];
   
   if (order.visitorId) {
     // Direct link via visitor ID

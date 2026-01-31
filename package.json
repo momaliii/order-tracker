@@ -4,6 +4,7 @@
   "description": "Platform-agnostic ecommerce attribution tracking system",
   "type": "module",
   "scripts": {
+    "postinstall": "npm ci --prefix dashboard",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:dashboard\"",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:dashboard": "cd dashboard && npm run dev",
